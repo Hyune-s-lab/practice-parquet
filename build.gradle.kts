@@ -16,6 +16,7 @@ java {
 
 repositories {
     mavenCentral()
+    maven { url = uri("https://repo.spring.io/milestone") }
 }
 
 dependencies {
@@ -26,6 +27,13 @@ dependencies {
     implementation("com.jayway.jsonpath:json-path")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+
+    // Spring AI Tika Document Reader
+    implementation("org.springframework.ai:spring-ai-tika-document-reader:1.0.0-M6")
+
+    // Apache Parquet
+    implementation("org.apache.parquet:parquet-hadoop:1.13.1")
+    implementation("org.apache.hadoop:hadoop-client:3.3.6")
 
     val logstashLogbackVersion: String by project
     implementation("net.logstash.logback:logstash-logback-encoder:$logstashLogbackVersion")

@@ -38,3 +38,9 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### Project Specific ###
+/src/main/resources/input/**
+/src/main/resources/persist/**
+*.parquet
+*.crc

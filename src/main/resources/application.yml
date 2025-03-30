@@ -1,1 +1,8 @@
-spring.application.name=practice-parquet
+spring:
+  application:
+    name: practice-parquet
+
+logging:
+  level:
+    root: info
+    dev.hyunec: DEBUG
