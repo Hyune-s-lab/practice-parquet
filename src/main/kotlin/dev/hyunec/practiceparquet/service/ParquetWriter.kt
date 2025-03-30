@@ -1,5 +1,6 @@
 package dev.hyunec.practiceparquet.service
 
+import dev.hyunec.practiceparquet.util.PerformanceLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -23,24 +24,51 @@ class ParquetWriter {
      * 문서 파일을 Parquet으로 변환
      */
     fun write(documentFile: File, outputParquetFile: File) {
-        log.info { "문서를 Parquet으로 변환: ${documentFile.name} -> ${outputParquetFile.name}" }
+        log.info { "문서를 Parquet으로 변환 시작: ${documentFile.name} -> ${outputParquetFile.name}" }
+        PerformanceLogger.start("문서_변환")
 
         // 기존 파일이 있으면 삭제
         if (outputParquetFile.exists()) {
             outputParquetFile.delete()
         }
 
-        // 문서를 Parquet으로 변환
-        val documents = readDocumentFile(documentFile)
+        // 문서 읽기
+        val documents = PerformanceLogger.measureWithValue("문서_읽기") {
+            readDocumentFile(documentFile)
+        }
+
+        // 문서 내용 분석
+        val textContent = documents.firstOrNull()?.text ?: ""
+        val lineCount = textContent.lines().size
+        val charCount = textContent.length
+        val wordCount = textContent.split(Regex("\\s+")).size
+        
+        PerformanceLogger.recordMetric("문서_개수", documents.size)
+        PerformanceLogger.recordMetric("문서_라인_수", lineCount)
+        PerformanceLogger.recordMetric("문서_글자_수", charCount)
+        PerformanceLogger.recordMetric("문서_단어_수", wordCount)
+
+        // 스키마 생성
         val schema = createDocumentSchema()
-        writeToParquet(documents, schema, outputParquetFile)
+
+        // Parquet 파일 쓰기
+        PerformanceLogger.measureFile("Parquet_쓰기", outputParquetFile) {
+            writeToParquet(documents, schema, outputParquetFile)
+        }
+        
+        // 압축률 계산
+        if (outputParquetFile.exists() && charCount > 0) {
+            val compressionRatio = outputParquetFile.length().toDouble() / charCount.toDouble()
+            PerformanceLogger.recordMetric("압축률_바이트_글자", String.format("%.2f", compressionRatio))
+        }
+        
+        PerformanceLogger.end("문서_변환")
     }
 
     /**
      * 문서 파일을 읽어 텍스트를 추출
      */
     private fun readDocumentFile(documentFile: File): List<Document> {
-        log.info { "문서 파일 읽기: ${documentFile.name}" }
         if (!documentFile.exists()) {
             throw IllegalArgumentException("파일이 존재하지 않습니다: ${documentFile.name}")
         }

@@ -1,9 +1,11 @@
 package dev.hyunec.practiceparquet.service
 
+import dev.hyunec.practiceparquet.util.PerformanceLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.example.data.Group
+import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.ParquetReader
 import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.springframework.stereotype.Service
@@ -17,21 +19,49 @@ class ParquetReader {
      * Parquet 파일 읽기
      */
     fun read(parquetFile: File): List<Map<String, String>> {
-        log.info { "Parquet 파일 읽기: ${parquetFile.name}" }
-        val configuration = Configuration()
-        val path = Path(parquetFile.toString())
-        val results = mutableListOf<Map<String, String>>()
-        val readSupport = GroupReadSupport()
+        log.info { "Parquet 파일 읽기 시작: ${parquetFile.name}" }
+        PerformanceLogger.start("Parquet_읽기")
 
-        ParquetReader.builder(readSupport, path)
-            .withConf(configuration)
-            .build().use { reader ->
-                generateSequence { reader.read() }
-                    .takeWhile { true }
-                    .forEach { group -> results.add(extractGroupData(group)) }
-            }
+        val records = PerformanceLogger.measureWithValue("Parquet_레코드_읽기") {
+            val configuration = Configuration()
+            val path = Path(parquetFile.toString())
+            val readSupport = GroupReadSupport()
 
-        return results
+            val records = mutableListOf<Map<String, String>>()
+
+            ParquetReader.builder(readSupport, path)
+                .withConf(configuration)
+                .build().use { reader ->
+                    generateSequence { reader.read() }
+                        .takeWhile { true }
+                        .forEach { group -> records.add(extractGroupData(group)) }
+                }
+
+            records
+        }
+
+        PerformanceLogger.recordMetric("Parquet_레코드_수", records.size)
+
+        // 스키마 정보 기록
+        val schema = getParquetSchema(parquetFile)
+        val fieldsCount = schema.lines().count {
+            it.contains("required") || it.contains("optional")
+        }
+
+        PerformanceLogger.recordMetric("Parquet_필드_수", fieldsCount)
+
+        // 내용 샘플 기록 (로그만)
+        if (records.isNotEmpty()) {
+            val contentSample = records.firstOrNull()?.get("content")?.let {
+                if (it.length > 50) it.substring(0, 50) + "..." else it
+            } ?: "내용 없음"
+
+            log.debug { "컨텐츠 샘플: $contentSample" }
+        }
+
+        PerformanceLogger.end("Parquet_읽기")
+
+        return records
     }
 
     /**
@@ -46,5 +76,17 @@ class ParquetReader {
                     ""
                 }
             }.filterValues { it.isNotEmpty() }
+    }
+
+    /**
+     * Parquet 파일의 스키마 정보를 가져옵니다.
+     */
+    private fun getParquetSchema(parquetFile: File): String {
+        val configuration = Configuration()
+        val path = Path(parquetFile.toString())
+
+        return ParquetFileReader.open(configuration, path).use { reader ->
+            reader.footer.fileMetaData.schema.toString()
+        }
     }
 }
