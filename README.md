@@ -19,3 +19,11 @@ PDF 파일을 읽고 Parquet 형식으로 변환하는 Spring Boot 애플리케�
 ./generate_dummy.sh {{origin_file}} {{count}}
 ./generate_dummy.sh src/main/resources/input/1mb.pdf 3
 ```
+
+## phase 2: keyword search
+
+1. keyword 입력
+
+```kotlin
+val searchKeyword = "L034" // 실제 파일에 있을만한 키워드로 변경 필요
+```

@@ -80,30 +80,35 @@ class ParquetWriter {
         // 스키마 생성
         val schema = createDocumentSchema()
 
-        // 모든 문서 읽기 및 합치기
+        // 1. PDF 파싱 단계 (PDF → Document 변환)
+        log.info { "1단계: PDF 파일 파싱 시작" }
+        PerformanceLogger.start("PDF_파싱_전체")
+        
         val allDocuments = mutableListOf<Document>()
         var totalLineCount = 0
         var totalCharCount = 0
         var totalWordCount = 0
         
         documentFiles.forEachIndexed { index, file ->
-            log.info { "문서 읽기 진행 중 (${index + 1}/${documentFiles.size}): ${file.name}" }
+            log.info { "PDF 파싱 진행 중 (${index + 1}/${documentFiles.size}): ${file.name}" }
             
-            PerformanceLogger.measureWithValue("문서_읽기_${file.name}") {
-                val documents = readDocumentFile(file)
-                allDocuments.addAll(documents)
-                
-                // 문서 내용 분석
-                documents.forEach { document ->
-                    val textContent = document.text ?: ""
-                    totalLineCount += textContent.lines().size
-                    totalCharCount += textContent.length
-                    totalWordCount += textContent.split(Regex("\\s+")).size
-                }
-                
-                documents
+            val documents = PerformanceLogger.measureWithValue("PDF_파싱_${file.name}") {
+                readDocumentFile(file)
+            }
+            
+            allDocuments.addAll(documents)
+            
+            // 문서 내용 분석
+            documents.forEach { document ->
+                val textContent = document.text ?: ""
+                totalLineCount += textContent.lines().size
+                totalCharCount += textContent.length
+                totalWordCount += textContent.split(Regex("\\s+")).size
             }
         }
+        
+        PerformanceLogger.end("PDF_파싱_전체")
+        log.info { "PDF 파싱 완료: 총 ${allDocuments.size}개 문서" }
         
         // 통계 기록
         PerformanceLogger.recordMetric("전체_문서_개수", allDocuments.size)
@@ -111,12 +116,12 @@ class ParquetWriter {
         PerformanceLogger.recordMetric("전체_글자_수", totalCharCount)
         PerformanceLogger.recordMetric("전체_단어_수", totalWordCount)
 
-        log.info { "총 ${allDocuments.size}개 문서 읽기 완료. Parquet 파일 생성 중..." }
-
-        // Parquet 파일 쓰기
-        PerformanceLogger.measureFile("Parquet_쓰기", outputParquetFile) {
-            writeToParquet(allDocuments, schema, outputParquetFile)
-        }
+        // 2. Parquet 저장 단계 (Document → Parquet 저장)
+        log.info { "2단계: Parquet 파일 저장 시작" }
+        PerformanceLogger.start("Parquet_저장")
+        writeToParquet(allDocuments, schema, outputParquetFile)
+        PerformanceLogger.end("Parquet_저장")
+        log.info { "Parquet 파일 저장 완료: ${outputParquetFile.name}" }
         
         // 압축률 계산
         if (outputParquetFile.exists() && totalCharCount > 0) {

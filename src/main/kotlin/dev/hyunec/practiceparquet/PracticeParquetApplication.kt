@@ -1,6 +1,7 @@
 package dev.hyunec.practiceparquet
 
 import dev.hyunec.practiceparquet.service.ParquetReader
+import dev.hyunec.practiceparquet.service.ParquetSearcher
 import dev.hyunec.practiceparquet.service.ParquetWriter
 import dev.hyunec.practiceparquet.util.PerformanceLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -17,7 +18,8 @@ class PracticeParquetApplication {
     @Bean
     fun commandLineRunner(
         parquetWriter: ParquetWriter,
-        parquetReader: ParquetReader
+        parquetReader: ParquetReader,
+        parquetSearcher: ParquetSearcher
     ): CommandLineRunner = CommandLineRunner {
         val inputFolder = File("src/main/resources/input")
         val outputFolder = File("src/main/resources/persist")
@@ -51,6 +53,19 @@ class PracticeParquetApplication {
         log.info { "Parquet 파일 읽기..." }
         val content = parquetReader.read(parquetFile)
         log.info { "Parquet 파일 읽기 완료 (${content.size}개 레코드)" }
+
+        // 키워드 검색 테스트
+        log.info { "Parquet 파일 키워드 검색 테스트..." }
+        val searchKeyword = "L034" // 실제 파일에 있을만한 키워드로 변경 필요
+        val searchResults = parquetSearcher.search(parquetFile, searchKeyword)
+        log.info { "검색 결과: ${searchResults.size}개 문서에서 '$searchKeyword' 발견" }
+
+        // 검색 결과 샘플 출력
+        if (searchResults.isNotEmpty()) {
+            val sample = searchResults.first()
+            log.info { "검색 결과 샘플 - ID: ${sample["id"]}" }
+            log.info { "내용 미리보기: ${sample["content"]?.take(100) ?: "[내용 없음]"}..." }
+        }
 
         // 전체 프로세스 완료
         PerformanceLogger.end("전체_프로세스")
