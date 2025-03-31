@@ -19,20 +19,32 @@ class PracticeParquetApplication {
         parquetWriter: ParquetWriter,
         parquetReader: ParquetReader
     ): CommandLineRunner = CommandLineRunner {
-        val inputFile = File("src/main/resources/input/sample.pdf")
-        val fileName = inputFile.nameWithoutExtension
-        val parquetFile = File("src/main/resources/persist/$fileName.parquet")
+        val inputFolder = File("src/main/resources/input")
+        val outputFolder = File("src/main/resources/persist")
 
-        log.info { "문서 파일 읽기 및 Parquet 파일로 변환 시작..." }
-        log.info { "파일: ${inputFile.name}" }
+        // 출력 폴더가 없으면 생성
+        if (!outputFolder.exists()) {
+            outputFolder.mkdirs()
+        }
+
+        // 폴더 내 모든 파일 목록 가져오기
+        val inputFiles = inputFolder.listFiles { file -> file.isFile } ?: emptyArray()
+
+        log.info { "문서 폴더 읽기 및 Parquet 파일로 변환 시작..." }
+        log.info { "파일 개수: ${inputFiles.size}" }
+
+        // 폴더명을 기반으로 단일 parquet 파일명 결정
+        val folderName = inputFolder.name
+        val parquetFile = File(outputFolder, "$folderName.parquet")
 
         // MDC에 기본 정보 기록
-        PerformanceLogger.recordMetric("입력_파일", inputFile.name)
+        PerformanceLogger.recordMetric("입력_폴더", inputFolder.absolutePath)
+        PerformanceLogger.recordMetric("파일_개수", inputFiles.size)
         PerformanceLogger.recordMetric("출력_파일", parquetFile.name)
         PerformanceLogger.start("전체_프로세스")
 
-        // 문서를 Parquet으로 변환
-        parquetWriter.write(inputFile, parquetFile)
+        // 폴더 내 모든 문서를 하나의 Parquet으로 변환
+        parquetWriter.writeFolder(inputFiles.toList(), parquetFile)
         log.info { "변환 완료: ${parquetFile.name}" }
 
         // Parquet 파일 읽기
