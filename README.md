@@ -27,3 +27,7 @@ PDF 파일을 읽고 Parquet 형식으로 변환하는 Spring Boot 애플리케�
 ```kotlin
 val searchKeyword = "L034" // 실제 파일에 있을만한 키워드로 변경 필요
 ```
+
+2. 실행
+
+<img width="1521" alt="Image" src="https://github.com/user-attachments/assets/51731da5-9267-41b9-81b0-cb8f65845a7c" />

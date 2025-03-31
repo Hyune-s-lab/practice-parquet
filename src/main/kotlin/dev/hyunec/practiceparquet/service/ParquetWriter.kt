@@ -12,12 +12,11 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.parquet.schema.MessageType
 import org.apache.parquet.schema.MessageTypeParser
 import org.springframework.ai.document.Document
-import org.springframework.ai.reader.tika.TikaDocumentReader
 import org.springframework.stereotype.Service
 import java.io.File
 
 @Service
-class ParquetWriter {
+class ParquetWriter(private val documentParser: DocumentParser) {
     private val log = KotlinLogging.logger {}
 
     /**
@@ -32,36 +31,12 @@ class ParquetWriter {
             outputParquetFile.delete()
         }
 
-        // 문서 읽기
-        val documents = PerformanceLogger.measureWithValue("문서_읽기") {
-            readDocumentFile(documentFile)
-        }
+        // 문서 파싱
+        val (documents, stats) = documentParser.parseDocuments(listOf(documentFile))
 
-        // 문서 내용 분석
-        val textContent = documents.firstOrNull()?.text ?: ""
-        val lineCount = textContent.lines().size
-        val charCount = textContent.length
-        val wordCount = textContent.split(Regex("\\s+")).size
-        
-        PerformanceLogger.recordMetric("문서_개수", documents.size)
-        PerformanceLogger.recordMetric("문서_라인_수", lineCount)
-        PerformanceLogger.recordMetric("문서_글자_수", charCount)
-        PerformanceLogger.recordMetric("문서_단어_수", wordCount)
+        // Parquet 저장
+        writeDocumentsToParquet(documents, outputParquetFile, stats.charCount)
 
-        // 스키마 생성
-        val schema = createDocumentSchema()
-
-        // Parquet 파일 쓰기
-        PerformanceLogger.measureFile("Parquet_쓰기", outputParquetFile) {
-            writeToParquet(documents, schema, outputParquetFile)
-        }
-        
-        // 압축률 계산
-        if (outputParquetFile.exists() && charCount > 0) {
-            val compressionRatio = outputParquetFile.length().toDouble() / charCount.toDouble()
-            PerformanceLogger.recordMetric("압축률_바이트_글자", String.format("%.2f", compressionRatio))
-        }
-        
         PerformanceLogger.end("문서_변환")
     }
 
@@ -77,68 +52,33 @@ class ParquetWriter {
             outputParquetFile.delete()
         }
 
+        // 1. 문서 파싱
+        val (allDocuments, documentStats) = documentParser.parseDocuments(documentFiles)
+
+        // 2. Parquet 저장
+        writeDocumentsToParquet(allDocuments, outputParquetFile, documentStats.charCount)
+
+        PerformanceLogger.end("폴더_변환")
+    }
+
+    /**
+     * Document 목록을 Parquet 파일로 저장
+     */
+    private fun writeDocumentsToParquet(documents: List<Document>, outputParquetFile: File, totalCharCount: Int) {
         // 스키마 생성
         val schema = createDocumentSchema()
 
-        // 1. PDF 파싱 단계 (PDF → Document 변환)
-        log.info { "1단계: PDF 파일 파싱 시작" }
-        PerformanceLogger.start("PDF_파싱_전체")
-        
-        val allDocuments = mutableListOf<Document>()
-        var totalLineCount = 0
-        var totalCharCount = 0
-        var totalWordCount = 0
-        
-        documentFiles.forEachIndexed { index, file ->
-            log.info { "PDF 파싱 진행 중 (${index + 1}/${documentFiles.size}): ${file.name}" }
-            
-            val documents = readDocumentFile(file)
-            allDocuments.addAll(documents)
-            
-            // 문서 내용 분석
-            documents.forEach { document ->
-                val textContent = document.text ?: ""
-                totalLineCount += textContent.lines().size
-                totalCharCount += textContent.length
-                totalWordCount += textContent.split(Regex("\\s+")).size
-            }
-        }
-        
-        PerformanceLogger.end("PDF_파싱_전체")
-        log.info { "PDF 파싱 완료: 총 ${allDocuments.size}개 문서" }
-        
-        // 통계 기록
-        PerformanceLogger.recordMetric("전체_문서_개수", allDocuments.size)
-        PerformanceLogger.recordMetric("전체_라인_수", totalLineCount)
-        PerformanceLogger.recordMetric("전체_글자_수", totalCharCount)
-        PerformanceLogger.recordMetric("전체_단어_수", totalWordCount)
-
-        // 2. Parquet 저장 단계 (Document → Parquet 저장)
         log.info { "2단계: Parquet 파일 저장 시작" }
         PerformanceLogger.start("Parquet_저장")
-        writeToParquet(allDocuments, schema, outputParquetFile)
+        writeToParquet(documents, schema, outputParquetFile)
         PerformanceLogger.end("Parquet_저장")
         log.info { "Parquet 파일 저장 완료: ${outputParquetFile.name}" }
-        
+
         // 압축률 계산
         if (outputParquetFile.exists() && totalCharCount > 0) {
             val compressionRatio = outputParquetFile.length().toDouble() / totalCharCount.toDouble()
             PerformanceLogger.recordMetric("압축률_바이트_글자", String.format("%.2f", compressionRatio))
         }
-        
-        PerformanceLogger.end("폴더_변환")
-    }
-
-    /**
-     * 문서 파일을 읽어 텍스트를 추출
-     */
-    private fun readDocumentFile(documentFile: File): List<Document> {
-        if (!documentFile.exists()) {
-            throw IllegalArgumentException("파일이 존재하지 않습니다: ${documentFile.name}")
-        }
-
-        val reader = TikaDocumentReader(documentFile.toURI().toString())
-        return reader.get()
     }
 
     /**

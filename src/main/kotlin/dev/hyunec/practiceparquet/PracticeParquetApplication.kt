@@ -1,6 +1,5 @@
 package dev.hyunec.practiceparquet
 
-import dev.hyunec.practiceparquet.service.ParquetReader
 import dev.hyunec.practiceparquet.service.ParquetSearcher
 import dev.hyunec.practiceparquet.service.ParquetWriter
 import dev.hyunec.practiceparquet.util.PerformanceLogger
@@ -18,7 +17,6 @@ class PracticeParquetApplication {
     @Bean
     fun commandLineRunner(
         parquetWriter: ParquetWriter,
-        parquetReader: ParquetReader,
         parquetSearcher: ParquetSearcher
     ): CommandLineRunner = CommandLineRunner {
         val inputFolder = File("src/main/resources/input")
@@ -48,11 +46,6 @@ class PracticeParquetApplication {
         // 폴더 내 모든 문서를 하나의 Parquet으로 변환
         parquetWriter.writeFolder(inputFiles.toList(), parquetFile)
         log.info { "변환 완료: ${parquetFile.name}" }
-
-        // Parquet 파일 읽기
-        log.info { "Parquet 파일 읽기..." }
-        val content = parquetReader.read(parquetFile)
-        log.info { "Parquet 파일 읽기 완료 (${content.size}개 레코드)" }
 
         // 키워드 검색 테스트
         log.info { "Parquet 파일 키워드 검색 테스트..." }
