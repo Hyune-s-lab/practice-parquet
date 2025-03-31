@@ -35,7 +35,9 @@ class ParquetSearcher {
         log.info { "총 로우 그룹 수: ${metadata.blocks.size}" }
 
         try {
-            // 키워드 검색 전략 1: 전체 파일 스캔 (더 정확한 검색)
+            // 키워드 검색 시간 측정
+            PerformanceLogger.start("Parquet_키워드_스캔")
+            
             val startTime = System.currentTimeMillis()
             val reader = ParquetReader.builder(GroupReadSupport(), path)
                 .withConf(configuration)
@@ -67,7 +69,19 @@ class ParquetSearcher {
             reader.close()
 
             val endTime = System.currentTimeMillis()
-            log.info { "검색 완료: ${matchedDocuments.size}개 문서 발견 (총 ${count}개 검색, ${endTime - startTime}ms 소요)" }
+            val searchTime = endTime - startTime
+            
+            PerformanceLogger.end("Parquet_키워드_스캔")
+            
+            // 검색 성능 메트릭 기록
+            PerformanceLogger.recordMetric("검색_총_레코드", count)
+            PerformanceLogger.recordMetric("검색_일치_레코드", matchedDocuments.size)
+            PerformanceLogger.recordMetric("검색_총_시간_ms", searchTime)
+            if (count > 0) {
+                PerformanceLogger.recordMetric("검색_레코드당_시간_ms", String.format("%.2f", searchTime.toDouble() / count))
+            }
+            
+            log.info { "검색 완료: ${matchedDocuments.size}개 문서 발견 (총 ${count}개 검색, ${searchTime}ms 소요)" }
         } catch (e: Exception) {
             log.error(e) { "Parquet 검색 중 오류 발생" }
         }

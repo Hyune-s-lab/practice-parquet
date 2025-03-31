@@ -92,10 +92,7 @@ class ParquetWriter {
         documentFiles.forEachIndexed { index, file ->
             log.info { "PDF 파싱 진행 중 (${index + 1}/${documentFiles.size}): ${file.name}" }
             
-            val documents = PerformanceLogger.measureWithValue("PDF_파싱_${file.name}") {
-                readDocumentFile(file)
-            }
-            
+            val documents = readDocumentFile(file)
             allDocuments.addAll(documents)
             
             // 문서 내용 분석
